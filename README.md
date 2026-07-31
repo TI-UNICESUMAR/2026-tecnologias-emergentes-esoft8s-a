@@ -1,0 +1,1 @@
+# 2026-tecnologias-emergentes-esoft8s-a
