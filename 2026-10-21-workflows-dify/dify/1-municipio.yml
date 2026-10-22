@@ -1,0 +1,297 @@
+app:
+  description: IBGE Localidades. Nome, UF e região do município.
+  icon: 🧭
+  icon_background: '#E4FBCC'
+  icon_type: emoji
+  mode: workflow
+  name: Pipeline | Município
+  use_icon_as_answer_icon: false
+dependencies: []
+kind: app
+version: 0.7.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      enabled: false
+    opening_statement: ''
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    nodes:
+    - id: inicio
+      type: custom
+      data:
+        title: Entrada
+        desc: ''
+        selected: false
+        type: start
+        variables:
+        - label: Código IBGE do município (7 dígitos)
+          max_length: 40
+          options: []
+          required: true
+          type: text-input
+          variable: codigo_ibge
+      position:
+        x: 30
+        y: 220
+      positionAbsolute:
+        x: 30
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: consulta
+      type: custom
+      data:
+        title: Consultar IBGE Localidades
+        desc: ''
+        selected: false
+        type: http-request
+        authorization:
+          type: no-auth
+          config: null
+        body:
+          type: none
+          data: []
+        headers: ''
+        method: get
+        params: ''
+        url: https://servicodados.ibge.gov.br/api/v1/localidades/municipios/{{#inicio.codigo_ibge#}}
+        ssl_verify: true
+        timeout:
+          connect: 10
+          read: 30
+          write: 30
+        retry_config:
+          enabled: false
+          max_retries: 1
+          retry_interval: 1000
+      position:
+        x: 350
+        y: 220
+      positionAbsolute:
+        x: 350
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: contrato
+      type: custom
+      data:
+        title: Validar e montar contrato
+        desc: ''
+        selected: false
+        type: code
+        code: |
+          function main({ codigo_ibge, status_code, body }) {
+            const base = { fonte: "IBGE Localidades", codigo_ibge }
+            if (status_code !== 200) {
+              return { ok: 0, contrato: { ok: false, ...base, status_http: status_code, erro: "Consulta HTTP sem sucesso" } }
+            }
+            const dado = JSON.parse(body)
+            if (Array.isArray(dado) && dado.length === 0) {
+              return { ok: 0, contrato: { ok: false, ...base, status_http: status_code, erro: "Município não encontrado. A API respondeu 200 com lista vazia" } }
+            }
+            const uf = dado["regiao-imediata"]["regiao-intermediaria"].UF
+            const dados = { nome: dado.nome, uf: uf.sigla, regiao: uf.regiao.nome }
+            return { ok: 1, contrato: { ok: true, ...base, dados } }
+          }
+        code_language: javascript
+        variables:
+        - variable: codigo_ibge
+          value_selector:
+          - inicio
+          - codigo_ibge
+        - variable: status_code
+          value_selector:
+          - consulta
+          - status_code
+        - variable: body
+          value_selector:
+          - consulta
+          - body
+        outputs:
+          ok:
+            type: number
+            children: null
+          contrato:
+            type: object
+            children: null
+      position:
+        x: 670
+        y: 220
+      positionAbsolute:
+        x: 670
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: decisao
+      type: custom
+      data:
+        title: Contrato válido?
+        desc: ''
+        selected: false
+        type: if-else
+        cases:
+        - case_id: 'true'
+          logical_operator: and
+          conditions:
+          - id: decisao-c1
+            variable_selector:
+            - contrato
+            - ok
+            comparison_operator: '='
+            value: '1'
+            varType: number
+      position:
+        x: 990
+        y: 220
+      positionAbsolute:
+        x: 990
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: saida
+      type: custom
+      data:
+        title: Contrato
+        desc: ''
+        selected: false
+        type: end
+        outputs:
+        - variable: contrato
+          value_selector:
+          - contrato
+          - contrato
+          value_type: object
+      position:
+        x: 1310
+        y: 220
+      positionAbsolute:
+        x: 1310
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: saida_erro
+      type: custom
+      data:
+        title: Erro no contrato
+        desc: ''
+        selected: false
+        type: end
+        outputs:
+        - variable: erro
+          value_selector:
+          - contrato
+          - contrato
+          value_type: object
+      position:
+        x: 1310
+        y: 480
+      positionAbsolute:
+        x: 1310
+        y: 480
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    edges:
+    - id: inicio-source-consulta-target
+      source: inicio
+      sourceHandle: source
+      target: consulta
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: start
+        targetType: http-request
+    - id: consulta-source-contrato-target
+      source: consulta
+      sourceHandle: source
+      target: contrato
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: http-request
+        targetType: code
+    - id: contrato-source-decisao-target
+      source: contrato
+      sourceHandle: source
+      target: decisao
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: code
+        targetType: if-else
+    - id: decisao-true-saida-target
+      source: decisao
+      sourceHandle: 'true'
+      target: saida
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: if-else
+        targetType: end
+    - id: decisao-false-saida_erro-target
+      source: decisao
+      sourceHandle: 'false'
+      target: saida_erro
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: if-else
+        targetType: end
+    viewport:
+      x: 0
+      y: 0
+      zoom: 0.8
+  rag_pipeline_variables: []

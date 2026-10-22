@@ -1,0 +1,526 @@
+app:
+  description: Recebe mensagens do Telegram por webhook e responde com os dados do município.
+  icon: 🧭
+  icon_background: '#E4FBCC'
+  icon_type: emoji
+  mode: workflow
+  name: Bot de Telegram do município
+  use_icon_as_answer_icon: false
+dependencies: []
+kind: app
+version: 0.7.0
+workflow:
+  conversation_variables: []
+  environment_variables:
+  - id: env-TELEGRAM_TOKEN
+    name: TELEGRAM_TOKEN
+    value: ''
+    value_type: secret
+    description: Token do bot criado no BotFather
+  features:
+    file_upload:
+      enabled: false
+    opening_statement: ''
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    nodes:
+    - id: telegram
+      type: custom
+      data:
+        title: Mensagem do Telegram
+        desc: ''
+        selected: false
+        type: trigger-webhook
+        method: POST
+        content_type: application/json
+        headers: []
+        params: []
+        body:
+        - name: message
+          type: object
+          required: false
+        variables:
+        - variable: _webhook_raw
+          label: raw
+          value_type: object
+          value_selector: []
+          required: true
+        - variable: message
+          label: body
+          value_type: object
+          value_selector: []
+          required: false
+        async_mode: true
+        status_code: 200
+        response_body: ''
+      position:
+        x: 30
+        y: 220
+      positionAbsolute:
+        x: 30
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: ler
+      type: custom
+      data:
+        title: Ler mensagem
+        desc: ''
+        selected: false
+        type: code
+        code: |
+          function main({ message }) {
+            const texto = (message && message.text ? message.text : "").trim()
+            const chat_id = message && message.chat ? String(message.chat.id) : ""
+            const ok = /^\d{7}$/.test(texto) ? 1 : 0
+            return { texto, chat_id, ok }
+          }
+        code_language: javascript
+        variables:
+        - variable: message
+          value_selector:
+          - telegram
+          - message
+        outputs:
+          texto:
+            type: string
+            children: null
+          chat_id:
+            type: string
+            children: null
+          ok:
+            type: number
+            children: null
+      position:
+        x: 350
+        y: 220
+      positionAbsolute:
+        x: 350
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: decisao
+      type: custom
+      data:
+        title: É um código IBGE?
+        desc: ''
+        selected: false
+        type: if-else
+        cases:
+        - case_id: 'true'
+          logical_operator: and
+          conditions:
+          - id: decisao-c1
+            variable_selector:
+            - ler
+            - ok
+            comparison_operator: '='
+            value: '1'
+            varType: number
+      position:
+        x: 670
+        y: 220
+      positionAbsolute:
+        x: 670
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: consulta
+      type: custom
+      data:
+        title: Consultar IBGE
+        desc: ''
+        selected: false
+        type: http-request
+        authorization:
+          type: no-auth
+          config: null
+        body:
+          type: none
+          data: []
+        headers: ''
+        method: get
+        params: ''
+        url: https://servicodados.ibge.gov.br/api/v1/localidades/municipios/{{#ler.texto#}}
+        ssl_verify: true
+        timeout:
+          connect: 10
+          read: 30
+          write: 30
+        retry_config:
+          enabled: false
+          max_retries: 1
+          retry_interval: 1000
+      position:
+        x: 990
+        y: 220
+      positionAbsolute:
+        x: 990
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: resposta
+      type: custom
+      data:
+        title: Montar resposta
+        desc: ''
+        selected: false
+        type: code
+        code: |
+          function main({ chat_id, codigo, status_code, body }) {
+            let texto = `O IBGE respondeu HTTP ${status_code}.`
+            if (status_code === 200) {
+              const dado = JSON.parse(body)
+              if (dado.nome) {
+                const uf = dado["regiao-imediata"]["regiao-intermediaria"].UF
+                texto = `${dado.nome} (${uf.sigla}), região ${uf.regiao.nome}.`
+              } else {
+                texto = `O código ${codigo} não existe no IBGE.`
+              }
+            }
+            return { corpo: JSON.stringify({ chat_id, text: texto }) }
+          }
+        code_language: javascript
+        variables:
+        - variable: chat_id
+          value_selector:
+          - ler
+          - chat_id
+        - variable: codigo
+          value_selector:
+          - ler
+          - texto
+        - variable: status_code
+          value_selector:
+          - consulta
+          - status_code
+        - variable: body
+          value_selector:
+          - consulta
+          - body
+        outputs:
+          corpo:
+            type: string
+            children: null
+      position:
+        x: 1310
+        y: 220
+      positionAbsolute:
+        x: 1310
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: enviar
+      type: custom
+      data:
+        title: Enviar resposta
+        desc: ''
+        selected: false
+        type: http-request
+        authorization:
+          type: no-auth
+          config: null
+        body:
+          type: json
+          data:
+          - id: key-value-1
+            key: ''
+            type: text
+            value: '{{#resposta.corpo#}}'
+        headers: Content-Type:application/json
+        method: post
+        params: ''
+        url: https://api.telegram.org/bot{{#env.TELEGRAM_TOKEN#}}/sendMessage
+        ssl_verify: true
+        timeout:
+          connect: 10
+          read: 30
+          write: 30
+        retry_config:
+          enabled: false
+          max_retries: 1
+          retry_interval: 1000
+      position:
+        x: 1630
+        y: 220
+      positionAbsolute:
+        x: 1630
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: saida
+      type: custom
+      data:
+        title: Respondido
+        desc: ''
+        selected: false
+        type: end
+        outputs:
+        - variable: status_resposta
+          value_selector:
+          - enviar
+          - status_code
+          value_type: number
+      position:
+        x: 1950
+        y: 220
+      positionAbsolute:
+        x: 1950
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: ajuda
+      type: custom
+      data:
+        title: Montar ajuda
+        desc: ''
+        selected: false
+        type: code
+        code: |
+          function main({ chat_id }) {
+            const text = "Envie o código IBGE do município, com 7 dígitos. Exemplo: 4115200"
+            return { corpo: JSON.stringify({ chat_id, text }) }
+          }
+        code_language: javascript
+        variables:
+        - variable: chat_id
+          value_selector:
+          - ler
+          - chat_id
+        outputs:
+          corpo:
+            type: string
+            children: null
+      position:
+        x: 990
+        y: 480
+      positionAbsolute:
+        x: 990
+        y: 480
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: enviar_ajuda
+      type: custom
+      data:
+        title: Enviar ajuda
+        desc: ''
+        selected: false
+        type: http-request
+        authorization:
+          type: no-auth
+          config: null
+        body:
+          type: json
+          data:
+          - id: key-value-1
+            key: ''
+            type: text
+            value: '{{#ajuda.corpo#}}'
+        headers: Content-Type:application/json
+        method: post
+        params: ''
+        url: https://api.telegram.org/bot{{#env.TELEGRAM_TOKEN#}}/sendMessage
+        ssl_verify: true
+        timeout:
+          connect: 10
+          read: 30
+          write: 30
+        retry_config:
+          enabled: false
+          max_retries: 1
+          retry_interval: 1000
+      position:
+        x: 1310
+        y: 480
+      positionAbsolute:
+        x: 1310
+        y: 480
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: saida_ajuda
+      type: custom
+      data:
+        title: Ajuda enviada
+        desc: ''
+        selected: false
+        type: end
+        outputs:
+        - variable: status_ajuda
+          value_selector:
+          - enviar_ajuda
+          - status_code
+          value_type: number
+      position:
+        x: 1630
+        y: 480
+      positionAbsolute:
+        x: 1630
+        y: 480
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    edges:
+    - id: telegram-source-ler-target
+      source: telegram
+      sourceHandle: source
+      target: ler
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: trigger-webhook
+        targetType: code
+    - id: ler-source-decisao-target
+      source: ler
+      sourceHandle: source
+      target: decisao
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: code
+        targetType: if-else
+    - id: decisao-true-consulta-target
+      source: decisao
+      sourceHandle: 'true'
+      target: consulta
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: if-else
+        targetType: http-request
+    - id: consulta-source-resposta-target
+      source: consulta
+      sourceHandle: source
+      target: resposta
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: http-request
+        targetType: code
+    - id: resposta-source-enviar-target
+      source: resposta
+      sourceHandle: source
+      target: enviar
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: code
+        targetType: http-request
+    - id: enviar-source-saida-target
+      source: enviar
+      sourceHandle: source
+      target: saida
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: http-request
+        targetType: end
+    - id: decisao-false-ajuda-target
+      source: decisao
+      sourceHandle: 'false'
+      target: ajuda
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: if-else
+        targetType: code
+    - id: ajuda-source-enviar_ajuda-target
+      source: ajuda
+      sourceHandle: source
+      target: enviar_ajuda
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: code
+        targetType: http-request
+    - id: enviar_ajuda-source-saida_ajuda-target
+      source: enviar_ajuda
+      sourceHandle: source
+      target: saida_ajuda
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: http-request
+        targetType: end
+    viewport:
+      x: 0
+      y: 0
+      zoom: 0.8
+  rag_pipeline_variables: []

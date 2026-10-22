@@ -1,0 +1,342 @@
+app:
+  description: DataSUS CNES. Unidades básicas de saúde do município.
+  icon: 🧭
+  icon_background: '#E4FBCC'
+  icon_type: emoji
+  mode: workflow
+  name: Pipeline | Saúde
+  use_icon_as_answer_icon: false
+dependencies: []
+kind: app
+version: 0.7.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      enabled: false
+    opening_statement: ''
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    nodes:
+    - id: inicio
+      type: custom
+      data:
+        title: Entrada
+        desc: ''
+        selected: false
+        type: start
+        variables:
+        - label: Código IBGE do município (7 dígitos)
+          max_length: 40
+          options: []
+          required: true
+          type: text-input
+          variable: codigo_ibge
+      position:
+        x: 30
+        y: 220
+      positionAbsolute:
+        x: 30
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: converter
+      type: custom
+      data:
+        title: Converter código para 6 dígitos
+        desc: ''
+        selected: false
+        type: code
+        code: |
+          function main({ codigo_ibge }) {
+            return { codigo6: codigo_ibge.trim().slice(0, 6) }
+          }
+        code_language: javascript
+        variables:
+        - variable: codigo_ibge
+          value_selector:
+          - inicio
+          - codigo_ibge
+        outputs:
+          codigo6:
+            type: string
+            children: null
+      position:
+        x: 350
+        y: 220
+      positionAbsolute:
+        x: 350
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: consulta
+      type: custom
+      data:
+        title: Consultar CNES
+        desc: ''
+        selected: false
+        type: http-request
+        authorization:
+          type: no-auth
+          config: null
+        body:
+          type: none
+          data: []
+        headers: ''
+        method: get
+        params: ''
+        url: https://apidadosabertos.saude.gov.br/cnes/estabelecimentos?codigo_municipio={{#converter.codigo6#}}&codigo_tipo_unidade=2&limit=20
+        ssl_verify: true
+        timeout:
+          connect: 10
+          read: 30
+          write: 30
+        retry_config:
+          enabled: false
+          max_retries: 1
+          retry_interval: 1000
+      position:
+        x: 670
+        y: 220
+      positionAbsolute:
+        x: 670
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: contrato
+      type: custom
+      data:
+        title: Validar e montar contrato
+        desc: ''
+        selected: false
+        type: code
+        code: |
+          function main({ codigo_ibge, status_code, body }) {
+            const base = { fonte: "DataSUS CNES, tipo de unidade 2", codigo_ibge }
+            if (status_code !== 200) {
+              return { ok: 0, contrato: { ok: false, ...base, status_http: status_code, erro: "Consulta HTTP sem sucesso" } }
+            }
+            const unidades = JSON.parse(body).estabelecimentos
+            const dados = {
+              unidades_basicas: unidades.length,
+              pode_haver_mais: unidades.length === 20,
+              exemplos: unidades.slice(0, 3).map((u) => u.nome_fantasia),
+            }
+            return { ok: 1, contrato: { ok: true, ...base, dados } }
+          }
+        code_language: javascript
+        variables:
+        - variable: codigo_ibge
+          value_selector:
+          - inicio
+          - codigo_ibge
+        - variable: status_code
+          value_selector:
+          - consulta
+          - status_code
+        - variable: body
+          value_selector:
+          - consulta
+          - body
+        outputs:
+          ok:
+            type: number
+            children: null
+          contrato:
+            type: object
+            children: null
+      position:
+        x: 990
+        y: 220
+      positionAbsolute:
+        x: 990
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: decisao
+      type: custom
+      data:
+        title: Contrato válido?
+        desc: ''
+        selected: false
+        type: if-else
+        cases:
+        - case_id: 'true'
+          logical_operator: and
+          conditions:
+          - id: decisao-c1
+            variable_selector:
+            - contrato
+            - ok
+            comparison_operator: '='
+            value: '1'
+            varType: number
+      position:
+        x: 1310
+        y: 220
+      positionAbsolute:
+        x: 1310
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: saida
+      type: custom
+      data:
+        title: Contrato
+        desc: ''
+        selected: false
+        type: end
+        outputs:
+        - variable: contrato
+          value_selector:
+          - contrato
+          - contrato
+          value_type: object
+      position:
+        x: 1630
+        y: 220
+      positionAbsolute:
+        x: 1630
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: saida_erro
+      type: custom
+      data:
+        title: Erro no contrato
+        desc: ''
+        selected: false
+        type: end
+        outputs:
+        - variable: erro
+          value_selector:
+          - contrato
+          - contrato
+          value_type: object
+      position:
+        x: 1630
+        y: 480
+      positionAbsolute:
+        x: 1630
+        y: 480
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    edges:
+    - id: inicio-source-converter-target
+      source: inicio
+      sourceHandle: source
+      target: converter
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: start
+        targetType: code
+    - id: converter-source-consulta-target
+      source: converter
+      sourceHandle: source
+      target: consulta
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: code
+        targetType: http-request
+    - id: consulta-source-contrato-target
+      source: consulta
+      sourceHandle: source
+      target: contrato
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: http-request
+        targetType: code
+    - id: contrato-source-decisao-target
+      source: contrato
+      sourceHandle: source
+      target: decisao
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: code
+        targetType: if-else
+    - id: decisao-true-saida-target
+      source: decisao
+      sourceHandle: 'true'
+      target: saida
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: if-else
+        targetType: end
+    - id: decisao-false-saida_erro-target
+      source: decisao
+      sourceHandle: 'false'
+      target: saida_erro
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: if-else
+        targetType: end
+    viewport:
+      x: 0
+      y: 0
+      zoom: 0.8
+  rag_pipeline_variables: []

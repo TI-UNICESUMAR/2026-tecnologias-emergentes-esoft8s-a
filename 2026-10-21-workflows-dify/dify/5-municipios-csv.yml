@@ -1,0 +1,512 @@
+app:
+  description: Lê um arquivo CSV, extrai os códigos IBGE e consulta cada município.
+  icon: 🧭
+  icon_background: '#E4FBCC'
+  icon_type: emoji
+  mode: workflow
+  name: Municípios a partir de um CSV
+  use_icon_as_answer_icon: false
+dependencies: []
+kind: app
+version: 0.7.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      enabled: false
+    opening_statement: ''
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    nodes:
+    - id: inicio
+      type: custom
+      data:
+        title: Entrada
+        desc: ''
+        selected: false
+        type: start
+        variables:
+        - label: Arquivo CSV com códigos IBGE
+          variable: arquivo
+          type: file
+          required: true
+          allowed_file_types:
+          - document
+          allowed_file_extensions: []
+          allowed_file_upload_methods:
+          - local_file
+          - remote_url
+          options: []
+      position:
+        x: 30
+        y: 220
+      positionAbsolute:
+        x: 30
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: extrator
+      type: custom
+      data:
+        title: Extrair texto do arquivo
+        desc: ''
+        selected: false
+        type: document-extractor
+        variable_selector:
+        - inicio
+        - arquivo
+        is_array_file: false
+      position:
+        x: 350
+        y: 220
+      positionAbsolute:
+        x: 350
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: ler
+      type: custom
+      data:
+        title: Ler códigos
+        desc: ''
+        selected: false
+        type: code
+        code: |
+          function main({ texto }) {
+            const codigos = texto.match(/\b\d{7}\b/g) || []
+            return { codigos, quantidade: codigos.length }
+          }
+        code_language: javascript
+        variables:
+        - variable: texto
+          value_selector:
+          - extrator
+          - text
+        outputs:
+          codigos:
+            type: array[string]
+            children: null
+          quantidade:
+            type: number
+            children: null
+      position:
+        x: 670
+        y: 220
+      positionAbsolute:
+        x: 670
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: decisao
+      type: custom
+      data:
+        title: Encontrou códigos?
+        desc: ''
+        selected: false
+        type: if-else
+        cases:
+        - case_id: 'true'
+          logical_operator: and
+          conditions:
+          - id: decisao-c1
+            variable_selector:
+            - ler
+            - quantidade
+            comparison_operator: '>'
+            value: '0'
+            varType: number
+      position:
+        x: 990
+        y: 220
+      positionAbsolute:
+        x: 990
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: sem_codigos
+      type: custom
+      data:
+        title: Arquivo sem códigos
+        desc: ''
+        selected: false
+        type: end
+        outputs:
+        - variable: quantidade
+          value_selector:
+          - ler
+          - quantidade
+          value_type: number
+      position:
+        x: 1310
+        y: 560
+      positionAbsolute:
+        x: 1310
+        y: 560
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: iteracao
+      type: custom
+      data:
+        title: Para cada código
+        desc: ''
+        selected: false
+        type: iteration
+        iterator_selector:
+        - ler
+        - codigos
+        iterator_input_type: array[string]
+        output_selector:
+        - linha
+        - linha
+        output_type: array[object]
+        start_node_id: iteracao-inicio
+        is_parallel: false
+        parallel_nums: 10
+        error_handle_mode: terminated
+      position:
+        x: 1310
+        y: 220
+      positionAbsolute:
+        x: 1310
+        y: 220
+      width: 760
+      height: 220
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 1
+    - id: iteracao-inicio
+      type: custom-iteration-start
+      parentId: iteracao
+      data:
+        title: ''
+        desc: ''
+        type: iteration-start
+        isInIteration: true
+      position:
+        x: 24
+        y: 68
+      positionAbsolute:
+        x: 1334
+        y: 288
+      width: 44
+      height: 48
+      draggable: false
+      selectable: false
+      zIndex: 1002
+    - id: consulta
+      type: custom
+      data:
+        title: Consultar IBGE
+        desc: ''
+        selected: false
+        type: http-request
+        authorization:
+          type: no-auth
+          config: null
+        body:
+          type: none
+          data: []
+        headers: ''
+        method: get
+        params: ''
+        url: https://servicodados.ibge.gov.br/api/v1/localidades/municipios/{{#iteracao.item#}}
+        ssl_verify: true
+        timeout:
+          connect: 10
+          read: 30
+          write: 30
+        retry_config:
+          enabled: false
+          max_retries: 1
+          retry_interval: 1000
+        isInIteration: true
+        iteration_id: iteracao
+      position:
+        x: 120
+        y: 68
+      positionAbsolute:
+        x: 1430
+        y: 288
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 1002
+      parentId: iteracao
+      extent: parent
+    - id: linha
+      type: custom
+      data:
+        title: Montar linha
+        desc: ''
+        selected: false
+        type: code
+        code: |
+          function main({ codigo, status_code, body }) {
+            if (status_code !== 200) {
+              return { linha: { codigo, nome: null, erro: `HTTP ${status_code}` } }
+            }
+            const dado = JSON.parse(body)
+            if (!dado.nome) {
+              return { linha: { codigo, nome: null, erro: "Código não encontrado" } }
+            }
+            const uf = dado["regiao-imediata"]["regiao-intermediaria"].UF.sigla
+            return { linha: { codigo, nome: dado.nome, uf, erro: null } }
+          }
+        code_language: javascript
+        variables:
+        - variable: codigo
+          value_selector:
+          - iteracao
+          - item
+        - variable: status_code
+          value_selector:
+          - consulta
+          - status_code
+        - variable: body
+          value_selector:
+          - consulta
+          - body
+        outputs:
+          linha:
+            type: object
+            children: null
+        isInIteration: true
+        iteration_id: iteracao
+      position:
+        x: 440
+        y: 68
+      positionAbsolute:
+        x: 1750
+        y: 288
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 1002
+      parentId: iteracao
+      extent: parent
+    - id: tabela
+      type: custom
+      data:
+        title: Montar tabela
+        desc: ''
+        selected: false
+        type: code
+        code: |
+          function main({ linhas }) {
+            const texto = ["| Código | Município | Situação |", "|---|---|---|"]
+            for (const l of linhas) {
+              const nome = l.nome ? `${l.nome} (${l.uf})` : "-"
+              texto.push(`| ${l.codigo} | ${nome} | ${l.erro || "ok"} |`)
+            }
+            const encontrados = linhas.filter((l) => l.nome).length
+            return { tabela: texto.join("\n"), encontrados }
+          }
+        code_language: javascript
+        variables:
+        - variable: linhas
+          value_selector:
+          - iteracao
+          - output
+        outputs:
+          tabela:
+            type: string
+            children: null
+          encontrados:
+            type: number
+            children: null
+      position:
+        x: 2150
+        y: 220
+      positionAbsolute:
+        x: 2150
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: saida
+      type: custom
+      data:
+        title: Resultado
+        desc: ''
+        selected: false
+        type: end
+        outputs:
+        - variable: tabela
+          value_selector:
+          - tabela
+          - tabela
+          value_type: string
+        - variable: encontrados
+          value_selector:
+          - tabela
+          - encontrados
+          value_type: number
+      position:
+        x: 2470
+        y: 220
+      positionAbsolute:
+        x: 2470
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    edges:
+    - id: inicio-source-extrator-target
+      source: inicio
+      sourceHandle: source
+      target: extrator
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: start
+        targetType: document-extractor
+    - id: extrator-source-ler-target
+      source: extrator
+      sourceHandle: source
+      target: ler
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: document-extractor
+        targetType: code
+    - id: ler-source-decisao-target
+      source: ler
+      sourceHandle: source
+      target: decisao
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: code
+        targetType: if-else
+    - id: decisao-false-sem_codigos-target
+      source: decisao
+      sourceHandle: 'false'
+      target: sem_codigos
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: if-else
+        targetType: end
+    - id: decisao-true-iteracao-target
+      source: decisao
+      sourceHandle: 'true'
+      target: iteracao
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: if-else
+        targetType: iteration
+    - id: iteracao-inicio-source-consulta-target
+      source: iteracao-inicio
+      sourceHandle: source
+      target: consulta
+      targetHandle: target
+      type: custom
+      zIndex: 1002
+      data:
+        isInIteration: true
+        isInLoop: false
+        sourceType: iteration-start
+        targetType: http-request
+        iteration_id: iteracao
+    - id: consulta-source-linha-target
+      source: consulta
+      sourceHandle: source
+      target: linha
+      targetHandle: target
+      type: custom
+      zIndex: 1002
+      data:
+        isInIteration: true
+        isInLoop: false
+        sourceType: http-request
+        targetType: code
+        iteration_id: iteracao
+    - id: iteracao-source-tabela-target
+      source: iteracao
+      sourceHandle: source
+      target: tabela
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: iteration
+        targetType: code
+    - id: tabela-source-saida-target
+      source: tabela
+      sourceHandle: source
+      target: saida
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: code
+        targetType: end
+    viewport:
+      x: 0
+      y: 0
+      zoom: 0.8
+  rag_pipeline_variables: []

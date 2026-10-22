@@ -1,0 +1,468 @@
+app:
+  description: Chama os fluxos publicados e monta a ficha do município.
+  icon: 🧭
+  icon_background: '#E4FBCC'
+  icon_type: emoji
+  mode: workflow
+  name: Pipeline | Ficha do município
+  use_icon_as_answer_icon: false
+dependencies: []
+kind: app
+version: 0.7.0
+workflow:
+  conversation_variables: []
+  environment_variables:
+  - id: env-CHAVE_MUNICIPIO
+    name: CHAVE_MUNICIPIO
+    value: ''
+    value_type: secret
+    description: Chave de API do fluxo Município publicado
+  - id: env-CHAVE_POPULACAO
+    name: CHAVE_POPULACAO
+    value: ''
+    value_type: secret
+    description: Chave de API do fluxo População publicado
+  - id: env-CHAVE_SAUDE
+    name: CHAVE_SAUDE
+    value: ''
+    value_type: secret
+    description: Chave de API do fluxo Saúde publicado
+  features:
+    file_upload:
+      enabled: false
+    opening_statement: ''
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    nodes:
+    - id: inicio
+      type: custom
+      data:
+        title: Entrada
+        desc: ''
+        selected: false
+        type: start
+        variables:
+        - label: Código IBGE do município (7 dígitos)
+          max_length: 40
+          options: []
+          required: true
+          type: text-input
+          variable: codigo_ibge
+      position:
+        x: 30
+        y: 220
+      positionAbsolute:
+        x: 30
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: mun
+      type: custom
+      data:
+        title: Chamar fluxo Município
+        desc: ''
+        selected: false
+        type: http-request
+        authorization:
+          type: api-key
+          config:
+            type: bearer
+            api_key: '{{#env.CHAVE_MUNICIPIO#}}'
+            header: ''
+        body:
+          type: json
+          data:
+          - id: key-value-1
+            key: ''
+            type: text
+            value: '{"inputs": {"codigo_ibge": "{{#inicio.codigo_ibge#}}"}, "response_mode": "blocking", "user": "orquestrador"}'
+        headers: Content-Type:application/json
+        method: post
+        params: ''
+        url: https://api.dify.ai/v1/workflows/run
+        ssl_verify: true
+        timeout:
+          connect: 10
+          read: 60
+          write: 30
+        retry_config:
+          enabled: false
+          max_retries: 1
+          retry_interval: 1000
+      position:
+        x: 350
+        y: 220
+      positionAbsolute:
+        x: 350
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: pop
+      type: custom
+      data:
+        title: Chamar fluxo População
+        desc: ''
+        selected: false
+        type: http-request
+        authorization:
+          type: api-key
+          config:
+            type: bearer
+            api_key: '{{#env.CHAVE_POPULACAO#}}'
+            header: ''
+        body:
+          type: json
+          data:
+          - id: key-value-1
+            key: ''
+            type: text
+            value: '{"inputs": {"codigo_ibge": "{{#inicio.codigo_ibge#}}"}, "response_mode": "blocking", "user": "orquestrador"}'
+        headers: Content-Type:application/json
+        method: post
+        params: ''
+        url: https://api.dify.ai/v1/workflows/run
+        ssl_verify: true
+        timeout:
+          connect: 10
+          read: 60
+          write: 30
+        retry_config:
+          enabled: false
+          max_retries: 1
+          retry_interval: 1000
+      position:
+        x: 670
+        y: 220
+      positionAbsolute:
+        x: 670
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: sau
+      type: custom
+      data:
+        title: Chamar fluxo Saúde
+        desc: ''
+        selected: false
+        type: http-request
+        authorization:
+          type: api-key
+          config:
+            type: bearer
+            api_key: '{{#env.CHAVE_SAUDE#}}'
+            header: ''
+        body:
+          type: json
+          data:
+          - id: key-value-1
+            key: ''
+            type: text
+            value: '{"inputs": {"codigo_ibge": "{{#inicio.codigo_ibge#}}"}, "response_mode": "blocking", "user": "orquestrador"}'
+        headers: Content-Type:application/json
+        method: post
+        params: ''
+        url: https://api.dify.ai/v1/workflows/run
+        ssl_verify: true
+        timeout:
+          connect: 10
+          read: 60
+          write: 30
+        retry_config:
+          enabled: false
+          max_retries: 1
+          retry_interval: 1000
+      position:
+        x: 990
+        y: 220
+      positionAbsolute:
+        x: 990
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: ficha
+      type: custom
+      data:
+        title: Montar ficha
+        desc: ''
+        selected: false
+        type: code
+        code: |
+          function ler(status_code, body, etapa) {
+            if (status_code !== 200) {
+              return { ok: false, etapa, erro: `Fluxo respondeu HTTP ${status_code}` }
+            }
+            const saidas = JSON.parse(body).data.outputs
+            return { etapa, ...(saidas.contrato || saidas.erro) }
+          }
+
+          function main({ codigo_ibge, s_mun, b_mun, s_pop, b_pop, s_sau, b_sau }) {
+            const municipio = ler(s_mun, b_mun, "municipio")
+            if (!municipio.ok) {
+              return { ok: 0, ficha: { ok: false, codigo_ibge, erros: [municipio] } }
+            }
+            const partes = [
+              ler(s_pop, b_pop, "populacao"),
+              ler(s_sau, b_sau, "saude"),
+            ]
+            const ficha = { ok: true, codigo_ibge, municipio: municipio.dados, erros: [] }
+            for (const parte of partes) {
+              if (parte.ok) {
+                ficha[parte.etapa] = parte.dados
+              } else {
+                ficha.erros.push(parte)
+              }
+            }
+            const pop = ficha.populacao ? ficha.populacao.populacao_2022 : null
+            const saude = ficha.saude || {}
+            const completo = pop && saude.unidades_basicas && !saude.pode_haver_mais
+            ficha.habitantes_por_unidade_basica = completo ? Math.round(pop / saude.unidades_basicas) : null
+            ficha.fontes = [municipio.fonte, ...partes.map((parte) => parte.fonte ?? null)]
+            return { ok: 1, ficha }
+          }
+        code_language: javascript
+        variables:
+        - variable: codigo_ibge
+          value_selector:
+          - inicio
+          - codigo_ibge
+        - variable: s_mun
+          value_selector:
+          - mun
+          - status_code
+        - variable: b_mun
+          value_selector:
+          - mun
+          - body
+        - variable: s_pop
+          value_selector:
+          - pop
+          - status_code
+        - variable: b_pop
+          value_selector:
+          - pop
+          - body
+        - variable: s_sau
+          value_selector:
+          - sau
+          - status_code
+        - variable: b_sau
+          value_selector:
+          - sau
+          - body
+        outputs:
+          ok:
+            type: number
+            children: null
+          ficha:
+            type: object
+            children: null
+      position:
+        x: 1310
+        y: 220
+      positionAbsolute:
+        x: 1310
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: decisao
+      type: custom
+      data:
+        title: Município encontrado?
+        desc: ''
+        selected: false
+        type: if-else
+        cases:
+        - case_id: 'true'
+          logical_operator: and
+          conditions:
+          - id: decisao-c1
+            variable_selector:
+            - ficha
+            - ok
+            comparison_operator: '='
+            value: '1'
+            varType: number
+      position:
+        x: 1630
+        y: 220
+      positionAbsolute:
+        x: 1630
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: saida
+      type: custom
+      data:
+        title: Ficha do município
+        desc: ''
+        selected: false
+        type: end
+        outputs:
+        - variable: ficha
+          value_selector:
+          - ficha
+          - ficha
+          value_type: object
+      position:
+        x: 1950
+        y: 220
+      positionAbsolute:
+        x: 1950
+        y: 220
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    - id: saida_erro
+      type: custom
+      data:
+        title: Erro na ficha
+        desc: ''
+        selected: false
+        type: end
+        outputs:
+        - variable: erro
+          value_selector:
+          - ficha
+          - ficha
+          value_type: object
+      position:
+        x: 1950
+        y: 480
+      positionAbsolute:
+        x: 1950
+        y: 480
+      width: 242
+      height: 120
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      zIndex: 0
+    edges:
+    - id: inicio-source-mun-target
+      source: inicio
+      sourceHandle: source
+      target: mun
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: start
+        targetType: http-request
+    - id: mun-source-pop-target
+      source: mun
+      sourceHandle: source
+      target: pop
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: http-request
+        targetType: http-request
+    - id: pop-source-sau-target
+      source: pop
+      sourceHandle: source
+      target: sau
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: http-request
+        targetType: http-request
+    - id: sau-source-ficha-target
+      source: sau
+      sourceHandle: source
+      target: ficha
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: http-request
+        targetType: code
+    - id: ficha-source-decisao-target
+      source: ficha
+      sourceHandle: source
+      target: decisao
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: code
+        targetType: if-else
+    - id: decisao-true-saida-target
+      source: decisao
+      sourceHandle: 'true'
+      target: saida
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: if-else
+        targetType: end
+    - id: decisao-false-saida_erro-target
+      source: decisao
+      sourceHandle: 'false'
+      target: saida_erro
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: if-else
+        targetType: end
+    viewport:
+      x: 0
+      y: 0
+      zoom: 0.8
+  rag_pipeline_variables: []
